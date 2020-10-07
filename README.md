@@ -7,8 +7,8 @@ The conversion can be done directly from 420 -> 444, or 420 -> 422 -> 444.
 Usage: yuv420to444 input_yuv420p_file width height output_file
 
        options:
-         planar = to enable planar output format
-         bilinear = to enable bi-linear filtering
+         planar = to enable the planar output format
+         bilinear = to enable the bi-linear filtering
 
 To generate the YUV file from JPEG, use the ffmpeg.
 
