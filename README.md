@@ -8,3 +8,7 @@ Usage: yuv420to444 <input yuv 420p file> <width> <height> <output file>
        options:
          planar = to enable planar output format
          bilinear = to enable bi-linear filtering
+
+To generate the YUV file from JPEG, use the ffmpeg.
+
+Use the YUView (https://github.com/IENT/YUView) to check the output YUV444 file.
