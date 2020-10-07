@@ -4,6 +4,7 @@
 #include <string.h>
 
 static uint8_t g_planar_format = 0;
+static uint8_t g_bilinear_filter = 0;
 
 void convert420to422(uint8_t* input, uint32_t w, uint32_t h, uint8_t* output) {
 	if ((input == NULL) || (output == NULL)) {
@@ -116,7 +117,7 @@ void convert420to444(uint8_t* input, uint32_t w, uint32_t h, uint8_t* output) {
 		uint32_t cur_line_dst = 0;
 		uint32_t cur_line_src = 0;
 
-		printf("Converting 420 -> 444, planar = %d\n", g_planar_format);
+		printf("Converting 420 -> 444, planar = %d, bi-linear = %d\n", g_planar_format, g_bilinear_filter);
 
 		// The luma Y channel is the same.
 		memcpy(pYDst, pYSrc, w * h);
@@ -124,7 +125,6 @@ void convert420to444(uint8_t* input, uint32_t w, uint32_t h, uint8_t* output) {
 		// Convert the chroma channels.
 		//
 		// Upconvert the vertical and horizontal to full resolution
-		// Use the nearest neighbor, the next chroma line/column has the same values as the previous line/column.
 		for (i = 0; i < h; i++) {
 			cur_line_src = i / 2 * stride_src;
 
@@ -133,22 +133,76 @@ void convert420to444(uint8_t* input, uint32_t w, uint32_t h, uint8_t* output) {
 					// Double the horizontal
 					// UVUV
 					cur_line_dst = i * 2 * stride_dst;
-					pUVDst[cur_line_dst + (k * 4) + 0] = pUSrc[cur_line_src + k];
-					pUVDst[cur_line_dst + (k * 4) + 1] = pVSrc[cur_line_src + k];
-					pUVDst[cur_line_dst + (k * 4) + 2] = pUSrc[cur_line_src + k];
-					pUVDst[cur_line_dst + (k * 4) + 3] = pVSrc[cur_line_src + k];
+
+					/*
+						Bilinear filtering
+						Y1 U1in		Y1 U1out = U1in
+						Y2          Y2 U2out = (U1in + U2in) / 2
+						Y3 U2in     Y3 U3out = U2in
+						Y4          Y4 U4out = (U2in + U3in) / 2
+					*/
+					if (g_bilinear_filter == 1) {
+						if (((k + 1) & 1) == 0)	{	// even
+							pUVDst[cur_line_dst + (k * 4) + 0] = (pUSrc[cur_line_src + k] + pUSrc[cur_line_src + k - 1]) / 2;
+							pUVDst[cur_line_dst + (k * 4) + 1] = (pVSrc[cur_line_src + k] + pVSrc[cur_line_src + k - 1]) / 2;
+							pUVDst[cur_line_dst + (k * 4) + 2] = (pUSrc[cur_line_src + k] + pUSrc[cur_line_src + k - 1]) / 2;
+							pUVDst[cur_line_dst + (k * 4) + 3] = (pVSrc[cur_line_src + k] + pVSrc[cur_line_src + k - 1]) / 2;
+						}
+						else {
+							pUVDst[cur_line_dst + (k * 4) + 0] = pUSrc[cur_line_src + k];
+							pUVDst[cur_line_dst + (k * 4) + 1] = pVSrc[cur_line_src + k];
+							pUVDst[cur_line_dst + (k * 4) + 2] = pUSrc[cur_line_src + k];
+							pUVDst[cur_line_dst + (k * 4) + 3] = pVSrc[cur_line_src + k];
+						}
+					}
+					// Use the nearest neighbor, the next chroma line/column has the same values as the previous line/column.
+					else {
+						pUVDst[cur_line_dst + (k * 4) + 0] = pUSrc[cur_line_src + k];
+						pUVDst[cur_line_dst + (k * 4) + 1] = pVSrc[cur_line_src + k];
+						pUVDst[cur_line_dst + (k * 4) + 2] = pUSrc[cur_line_src + k];
+						pUVDst[cur_line_dst + (k * 4) + 3] = pVSrc[cur_line_src + k];
+					}
 				}
 				else {
-					// Double the horizontal for U
-					// UU
-					cur_line_dst = i * stride_dst;
-					pUDst[cur_line_dst + (k * 2) + 0] = pUSrc[cur_line_src + k];
-					pUDst[cur_line_dst + (k * 2) + 1] = pUSrc[cur_line_src + k];
+					if (g_bilinear_filter == 1) {
+						if (((k + 1) & 1) == 0) {	// even
+							// Double the horizontal for U
+							// UU
+							cur_line_dst = i * stride_dst;
+							pUDst[cur_line_dst + (k * 2) + 0] = (pUSrc[cur_line_src + k] + pUSrc[cur_line_src + k - 1]) / 2;
+							pUDst[cur_line_dst + (k * 2) + 1] = (pUSrc[cur_line_src + k] + pUSrc[cur_line_src + k - 1]) / 2;
 
-					// Double the horizontal for V
-					// VV
-					pVDst[cur_line_dst + (k * 2) + 0] = pVSrc[cur_line_src + k];
-					pVDst[cur_line_dst + (k * 2) + 1] = pVSrc[cur_line_src + k];
+							// Double the horizontal for V
+							// VV
+							pVDst[cur_line_dst + (k * 2) + 0] = (pVSrc[cur_line_src + k] + pVSrc[cur_line_src + k - 1]) / 2;
+							pVDst[cur_line_dst + (k * 2) + 1] = (pVSrc[cur_line_src + k] + pVSrc[cur_line_src + k - 1]) / 2;
+						}
+						else {	// same as nearest neighbor
+							// Double the horizontal for U
+							// UU
+							cur_line_dst = i * stride_dst;
+							pUDst[cur_line_dst + (k * 2) + 0] = pUSrc[cur_line_src + k];
+							pUDst[cur_line_dst + (k * 2) + 1] = pUSrc[cur_line_src + k];
+
+							// Double the horizontal for V
+							// VV
+							pVDst[cur_line_dst + (k * 2) + 0] = pVSrc[cur_line_src + k];
+							pVDst[cur_line_dst + (k * 2) + 1] = pVSrc[cur_line_src + k];
+						}
+					}
+					// Use the nearest neighbor, the next chroma line/column has the same values as the previous line/column.
+					else {
+						// Double the horizontal for U
+						// UU
+						cur_line_dst = i * stride_dst;
+						pUDst[cur_line_dst + (k * 2) + 0] = pUSrc[cur_line_src + k];
+						pUDst[cur_line_dst + (k * 2) + 1] = pUSrc[cur_line_src + k];
+
+						// Double the horizontal for V
+						// VV
+						pVDst[cur_line_dst + (k * 2) + 0] = pVSrc[cur_line_src + k];
+						pVDst[cur_line_dst + (k * 2) + 1] = pVSrc[cur_line_src + k];
+					}
 				}
 			}
 		}
@@ -162,15 +216,25 @@ int main(int argc, char** argv) {
 	int err;
 
 	if (argc < 5) {
-		printf("Usage: %s <input yuv420 planar file name> <width> <height> <output yuv444 semi-planar file name> <optional planar format: 0|1>\n", argv[0]);
+		printf("Usage: %s <input yuv420 planar file name> <width> <height> <output yuv444 semi-planar file name>\n", argv[0]);
+		printf("   Optional:\n");
+		printf("   planar = to output in planar format, default is semi-planar/interleaved UV.");
+		printf("   bilinear = use bilinear filter when upconverting the UV channels\n");
 		return 0;
 	}
 
 	w = atoi(argv[2]);
 	h = atoi(argv[3]);
 
-	if (argc == 6) {
-		g_planar_format = atoi(argv[5]);
+	int i = 1;
+	while (i < argc) {
+		if (strcmp("planar", argv[i]) == 0) {
+			g_planar_format = 1;
+		}
+		else if (strcmp("bilinear", argv[i]) == 0) {
+			g_bilinear_filter = 1;
+		}
+		i++;
 	}
 
 	printf("Input info:\n");
@@ -211,7 +275,7 @@ int main(int argc, char** argv) {
 
 			if (buf_input && buf_output) {
 				// Read input data
-				int read = fread(buf_input, 1, in_size, fin);
+				int read = (int) fread(buf_input, 1, in_size, fin);
 				if (read < in_size) {
 					printf("Warning, read size is %d, expecting %d, continue...", read, in_size);
 				}
