@@ -5,6 +5,7 @@ This is a simple code to show how to convert YUV420 planar format to YUV444 plan
 The conversion can be done directly from 420 -> 444, or 420 -> 422 -> 444.
 
 Usage: yuv420to444 input_yuv420p_file width height output_file
+
        options:
          planar = to enable planar output format
          bilinear = to enable bi-linear filtering
